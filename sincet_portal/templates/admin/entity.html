@@ -1,0 +1,76 @@
+{% extends "admin/layout.html" %}
+{% block title %}{{ meta.label }} – SINCET{% endblock %}
+{% block heading %}{{ cfg.icon }} {{ meta.label }}{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <div class="bar">
+    <input class="inp" id="q" placeholder="🔍 Search" style="flex:2">
+    {% if meta.has_dept %}<select class="inp" id="fDept"><option value="">All departments</option>{% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select>{% endif %}
+    <button class="btn sm" id="addBtn">＋ Add {{ meta.label[:-1] if meta.label.endswith('s') else meta.label }}</button>
+  </div>
+  <div class="tw"><table><thead><tr id="head"></tr></thead><tbody id="body"></tbody></table></div>
+  <p class="muted" id="count" style="margin:10px 2px 0"></p>
+</div>
+
+<div class="modal" id="formM"><div class="box glass">
+  <h3 id="formT"></h3><div id="formF"></div>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn" id="save">Save</button></div>
+</div></div>
+<div class="modal" id="delM"><div class="box glass"><h3>Delete record?</h3><p class="muted">This cannot be undone.</p>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" id="delOk">Delete</button></div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const META = {{ meta|tojson }}, OPT = {{ options|tojson }};
+let rows = [], editing = null, delId = null;
+$('#head').innerHTML = META.columns.map(c => `<th>${esc(c[1])}</th>`).join('') + '<th>Actions</th>';
+
+async function load() {
+  const p = new URLSearchParams({ q: $('#q').value.trim(), dept: $('#fDept')?.value || '' });
+  try { rows = (await api(`/admin/api/e/${META.key}?` + p)).rows; render(); } catch (e) { toast(e.message, 'err'); }
+}
+function cell(k, v) {
+  if (k === 'status') return `<span class="pill ${esc(v)}">${esc(v)}</span>`;
+  return esc(v);
+}
+function render() {
+  $('#body').innerHTML = rows.length ? rows.map((r, i) => `<tr style="animation-delay:${Math.min(i, 20) * 20}ms">` +
+    META.columns.map(c => `<td>${cell(c[0], r[c[0]])}</td>`).join('') +
+    `<td><div class="acts"><button class="btn ghost sm" data-e="${i}">✏️</button><button class="btn danger sm" data-d="${r.id}">🗑</button></div></td></tr>`).join('')
+    : `<tr><td colspan="${META.columns.length + 1}" class="empty">No records yet.</td></tr>`;
+  $('#count').textContent = rows.length + ' record(s)';
+}
+function fieldHTML(f, val) {
+  const v = val ?? '';
+  if (f.type === 'select') {
+    const opts = Array.isArray(f.options) ? f.options.map(o => ({ value: o, label: o })) : OPT[f.options];
+    return `<select class="inp" data-f="${f.name}">${opts.map(o => `<option value="${esc(o.value)}" ${String(o.value) === String(v) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`;
+  }
+  return `<input class="inp" data-f="${f.name}" type="${f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}" step="any" maxlength="${f.maxlen || 100}" value="${esc(v)}">`;
+}
+function openForm(r) {
+  editing = r;
+  $('#formT').textContent = (r ? 'Edit ' : 'Add ') + META.label.replace(/s$/, '');
+  $('#formF').innerHTML = META.fields.map(f => `<div class="field"><label>${esc(f.label)}</label>${fieldHTML(f, r ? r[f.name] : (f.type === 'date' ? new Date().toISOString().slice(0, 10) : ''))}</div>`).join('');
+  openModal('formM');
+}
+$('#addBtn').onclick = () => openForm(null);
+$('#body').addEventListener('click', e => {
+  const ed = e.target.closest('[data-e]'), dl = e.target.closest('[data-d]');
+  if (ed) openForm(rows[+ed.dataset.e]); if (dl) { delId = dl.dataset.d; openModal('delM'); }
+});
+$('#save').onclick = async () => {
+  const body = {}; $$('#formF [data-f]').forEach(el => body[el.dataset.f] = el.value);
+  const b = $('#save'); busy(b, true);
+  try {
+    await api(`/admin/api/e/${META.key}` + (editing ? '/' + editing.id : ''), editing ? 'PUT' : 'POST', body);
+    closeModal('formM'); toast('Saved'); load();
+  } catch (e) { toast(e.message, 'err'); } finally { busy(b, false); }
+};
+$('#delOk').onclick = async () => {
+  try { await api(`/admin/api/e/${META.key}/${delId}`, 'DELETE'); closeModal('delM'); toast('Deleted'); load(); } catch (e) { closeModal('delM'); toast(e.message, 'err'); }
+};
+$('#q').addEventListener('input', debounce(load)); $('#fDept')?.addEventListener('change', load);
+load();
+</script>
+{% endblock %}

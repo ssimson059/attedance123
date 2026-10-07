@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard – SINCET{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block body %}
+{% set ov = rep.overall %}
+<main class="main" style="max-width:1200px;margin:auto">
+  <header class="top">
+    <div class="brand"><div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt=""></div>
+      <div><b>Student Dashboard</b><small>{{ me.dept_name }}{% if me.year_no %} · Year {{ me.year_no }}{% endif %}{% if me.section_name %} · Sec {{ me.section_name }}{% endif %}</small></div></div>
+    <div class="who"><div style="text-align:right"><b>{{ me.name }}</b><br><small class="muted">{{ me.username }}</small></div>
+      <a class="btn ghost sm" href="{{ password_url() }}">🔑</a><a class="btn ghost sm" href="{{ logout_url() }}">Logout</a></div>
+  </header>
+
+  <div class="grid g2">
+    <div class="card glass rise d1"><h3>👤 My profile</h3>
+      <div class="grid g2" style="gap:10px">
+        <div><small class="muted">Name</small><br><b>{{ me.name }}</b></div>
+        <div><small class="muted">Student ID</small><br><b class="mono">{{ me.username }}</b></div>
+        <div><small class="muted">Department</small><br><b>{{ me.dept_name }}</b></div>
+        <div><small class="muted">Year / Section</small><br><b>{{ me.year_no or '–' }} / {{ me.section_name or '–' }}</b></div>
+      </div></div>
+    <div class="card glass rise d1"><h3>🤖 AI attendance <span class="pill info" id="ciState">Checking…</span></h3>
+      <div id="ciNone" class="muted">No class is open right now. When your faculty starts a class, keep this page open and your attendance is marked automatically.</div>
+      <div id="ciLive" style="display:none">
+        <p style="margin:0 0 8px"><b id="ciSub"></b> <small class="muted">· closes in <b id="ciEnds"></b></small></p>
+        <div class="tip info" id="ciMsg" style="margin:0">AI is verifying your presence… keep this page open.</div>
+        <details style="margin-top:12px"><summary class="muted" style="cursor:pointer;font-size:.85rem">Location not working? Use the class code</summary>
+          <div class="field" style="margin-top:10px"><label for="ciCode">6-digit code on the classroom screen</label>
+            <input class="inp codein" id="ciCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="000000"></div>
+          <button class="btn good" id="ciBtn" style="width:100%">Mark me present</button></details>
+      </div>
+      <div id="ciDone" class="tip good" style="display:none">✔ Your attendance is marked for <b id="ciDoneSub"></b>.</div>
+    </div>
+  </div>
+
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card glass rise d1 center">
+      <h3>Overall Attendance</h3>
+      <div style="display:grid;place-items:center">
+        <div class="ring" id="ring" style="--rc:{{ 'var(--green)' if ov is not none and ov >= 80 else ('var(--amber)' if ov is not none and ov >= threshold else 'var(--red)') }}"><b id="ringNum">0%</b></div></div>
+      <p class="muted" style="margin:12px 0 0">{{ rep.present }} present of {{ rep.total }} classes</p>
+      {% if ov is not none and ov < threshold %}<span class="pill danger">Below {{ threshold|int }}% requirement</span>{% endif %}
+    </div>
+    <div class="card glass rise d2" style="grid-column:span 2">
+      <h3>Subject-wise Attendance</h3>
+      {% for s in rep.subjects %}
+      <div class="sub-row"><div class="h"><span><b>{{ s.code }}</b> <span class="muted">{{ s.name }}</span></span><span>{{ (s.pct ~ '%') if s.pct is not none else 'No classes' }} <small class="muted">({{ s.present }}/{{ s.total }})</small></span></div>
+        <div class="prog"><i data-w="{{ s.pct or 0 }}" style="--pc:{{ 'var(--green)' if s.pct is not none and s.pct >= 80 else ('var(--amber)' if s.pct is not none and s.pct >= threshold else 'var(--red)') }}"></i></div></div>
+      {% else %}<div class="empty">No subjects assigned yet.</div>{% endfor %}
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card glass rise d3"><h3>🤖 AI Insights &amp; Recommendations</h3>
+      {% for t in tips %}<div class="tip {{ t.level }}">{{ t.text }}</div>{% endfor %}</div>
+    <div class="card glass rise d3"><h3>Performance Analytics</h3>
+      <div class="chart-box" style="height:200px"><canvas id="cTrend"></canvas></div>
+      <div class="chart-box" style="height:200px;margin-top:10px"><canvas id="cMarks"></canvas></div></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card glass rise d4"><h3>📝 Marks</h3>
+      <div class="tw"><table><thead><tr><th>Subject</th><th>Exam</th><th>Marks</th><th>%</th></tr></thead><tbody>
+      {% set ns = namespace(n=0) %}
+      {% for s in rep.subjects %}{% for m in s.marks %}{% set ns.n = ns.n + 1 %}
+        <tr><td>{{ s.code }}</td><td>{{ m.exam_type }}</td><td>{{ m.marks|round(1) }} / {{ m.max_marks|round(0)|int }}</td>
+        <td><span class="pill {{ 'good' if m.marks/m.max_marks >= 0.6 else ('warn' if m.marks/m.max_marks >= 0.4 else 'danger') }}">{{ (100*m.marks/m.max_marks)|round(1) }}%</span></td></tr>
+      {% endfor %}{% endfor %}
+      {% if ns.n == 0 %}<tr><td colspan="4" class="empty">No marks published yet.</td></tr>{% endif %}
+      </tbody></table></div></div>
+    <div class="card glass rise d4"><h3>🕘 Attendance History</h3>
+      <div class="tw"><table><thead><tr><th>Date</th><th>Subject</th><th>Status</th><th>Via</th></tr></thead><tbody>
+      {% for h in rep.history %}<tr><td>{{ h.date }}</td><td>{{ h.subject }}</td><td><span class="pill {{ h.status }}">{{ h.status }}</span></td><td>{{ h.method }}</td></tr>
+      {% else %}<tr><td colspan="4" class="empty">No attendance recorded yet.</td></tr>{% endfor %}
+      </tbody></table></div></div>
+  </div>
+
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+const REP = {{ rep|tojson }};
+const ov = {{ (rep.overall if rep.overall is not none else 0)|tojson }};
+(() => {
+  const ring = $('#ring'), num = $('#ringNum'); countUp(num, ov, 1, '%');
+  const t0 = performance.now(); (function s(t) { const p = Math.min(1, (t - t0) / 1300); ring.style.setProperty('--v', ov * (1 - Math.pow(1 - p, 4))); if (p < 1) requestAnimationFrame(s); })(t0);
+  setTimeout(() => $$('.prog i').forEach(i => i.style.width = i.dataset.w + '%'), 250);
+  if (!window.Chart) return;
+  Chart.defaults.color = '#c7d6f5'; Chart.defaults.font.family = 'Inter';
+  const grid = { color: 'rgba(255,255,255,.08)' }, base = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, animation: { duration: 1300 } };
+  new Chart($('#cTrend'), { type: 'line', data: { labels: REP.trend.map(t => t.date.slice(5)), datasets: [{ data: REP.trend.map(t => t.pct), borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,.18)', fill: true, tension: .4, pointRadius: 2 }] },
+    options: { ...base, scales: { y: { min: 0, max: 100, grid, title: { display: true, text: 'Cumulative attendance %' } }, x: { grid: { display: false } } } } });
+  const subs = REP.subjects.filter(s => s.marks_pct !== null);
+  new Chart($('#cMarks'), { type: 'bar', data: { labels: subs.map(s => s.code), datasets: [{ data: subs.map(s => s.marks_pct), backgroundColor: subs.map(s => s.marks_pct >= 60 ? '#22c55e' : s.marks_pct >= 40 ? '#f59e0b' : '#f43f5e'), borderRadius: 8 }] },
+    options: { ...base, scales: { y: { min: 0, max: 100, grid, title: { display: true, text: 'Marks %' } }, x: { grid: { display: false } } } } });
+})();
+
+/* ---- AI attendance: passive presence beacons + optional class-code fallback ---- */
+const DEV = (() => { try { let d = localStorage.getItem('sincet_dev'); if (!d) { d = (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')); localStorage.setItem('sincet_dev', d); } return d; } catch (e) { return ''; } })();
+let CI = null, sending = false, lastBeacon = 0;
+const mmss = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+const MSG = { verifying: ['info', 'AI is verifying your presence… keep this page open.'], review: ['warn', 'Sent to your faculty for confirmation. You can stay on this page.'], blocked: ['danger', 'Could not verify you on this phone. Use your own registered phone or ask your faculty.'], rejected: ['danger', 'Your faculty marked you absent for this class.'] };
+function paintCI() {
+  const open = (CI || []).filter(x => x.stage !== 'marked'), done = (CI || []).filter(x => x.stage === 'marked');
+  const st = open[0] ? open[0].stage : (done.length ? 'marked' : 'none');
+  $('#ciState').textContent = { verifying: 'Verifying', review: 'In review', blocked: 'Blocked', rejected: 'Absent', marked: 'Present', none: 'Idle' }[st];
+  $('#ciState').className = 'pill ' + ({ marked: 'good', verifying: 'info', review: 'warn', blocked: 'danger', rejected: 'danger', none: 'info' }[st]);
+  $('#ciNone').style.display = st === 'none' ? '' : 'none';
+  $('#ciLive').style.display = open.length ? '' : 'none';
+  $('#ciDone').style.display = !open.length && done.length ? '' : 'none';
+  if (open.length) { const s = open[0], m = MSG[s.stage]; $('#ciSub').textContent = s.subject; $('#ciEnds').textContent = mmss(s.ends_in);
+    $('#ciMsg').className = 'tip ' + m[0]; $('#ciMsg').textContent = m[1] + (s.stage === 'verifying' && s.hint ? ' (' + s.hint + ')' : ''); }
+  if (done.length) $('#ciDoneSub').textContent = done[0].subject;
+}
+function getPos() {
+  return new Promise(res => {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(p => res(p.coords), () => res(null), { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+  });
+}
+async function beacon() {
+  if (sending || !(CI || []).some(x => ['verifying', 'review'].includes(x.stage))) return;
+  sending = true; lastBeacon = Date.now();
+  try {
+    const body = { device: DEV };
+    if (CI.some(x => x.needs_location)) { const c = await getPos(); if (c) { body.lat = c.latitude; body.lon = c.longitude; body.accuracy = c.accuracy; } }
+    const r = await api('/student/api/presence', 'POST', body);
+    r.sessions.forEach(x => { const m = CI.find(c => c.id === x.id); if (m) { m.stage = x.stage; m.hint = x.hint; m.marked = x.stage === 'marked'; } });
+    paintCI(); if (r.sessions.some(x => x.stage === 'marked')) { toast('Attendance marked by AI ✔'); setTimeout(() => location.reload(), 1500); }
+  } catch (e) { /* retry on the next beat */ } finally { sending = false; }
+}
+async function pollCI() { try { CI = (await api('/student/api/attendance/status')).sessions; paintCI(); if (Date.now() - lastBeacon > 15000) beacon(); } catch (e) { /* retry next tick */ } }
+setInterval(() => { (CI || []).forEach(x => x.ends_in = Math.max(0, x.ends_in - 1)); paintCI(); }, 1000);
+setInterval(pollCI, 5000); pollCI();
+$('#ciCode').addEventListener('input', e => e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6));
+$('#ciBtn').onclick = async () => {
+  const code = $('#ciCode').value.trim(); if (code.length !== 6) { toast('Enter the 6-digit code.', 'err'); return; }
+  const b = $('#ciBtn'); busy(b, true);
+  try {
+    const body = { code, device: DEV };
+    if ((CI || []).some(x => x.needs_location)) { const c = await getPos(); if (c) { body.lat = c.latitude; body.lon = c.longitude; body.accuracy = c.accuracy; } }
+    const r = await api('/student/api/attendance/mark', 'POST', body);
+    toast(r.message); $('#ciCode').value = ''; setTimeout(() => location.reload(), 1200);
+  } catch (e) { toast(e.message, 'err'); } finally { busy(b, false); }
+};
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="csrf" content="{{ csrf_token() }}">
+<title>{% block title %}SINCET Smart Attendance{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body class="{% block bodyclass %}{% endblock %}" {% if cur.role %}data-auth="1"{% endif %}>
+<div class="bg {% block bgclass %}blur{% endblock %}"></div><div class="veil"></div>
+<div class="orb a"></div><div class="orb b"></div>
+{% block body %}{% endblock %}
+<div id="toasts"></div>
+{% if cur.role %}
+<div class="modal" id="idleModal"><div class="box glass center">
+  <h3>Still there?</h3>
+  <p class="muted">For your security you will be signed out in <b id="idleCount">60</b> seconds due to inactivity.</p>
+  <div class="row-end" style="justify-content:center"><button class="btn" data-close>Stay signed in</button></div>
+</div></div>
+{% endif %}
+<script>window.SESSION_SECONDS={{ timeout_seconds }};window.PORTAL="{{ cur.role or portal }}";</script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

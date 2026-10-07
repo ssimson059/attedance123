@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} – SINCET{% endblock %}
+{% block body %}
+<main class="auth">
+  <section class="auth-card glass rise center">
+    <div style="font-family:var(--head);font-size:4rem;font-weight:700">{{ code }}</div>
+    <h1>{{ title }}</h1>
+    <p class="sub">{{ message }}</p>
+    <a class="btn" href="{{ url_for('landing') }}">Back to sign in</a>
+  </section>
+</main>
+{% endblock %}

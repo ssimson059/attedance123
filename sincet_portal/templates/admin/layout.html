@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block bodyclass %}admin{% endblock %}
+{% block body %}
+<div class="shell">
+  <aside class="side glass">
+    <div class="brand"><div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt=""></div>
+      <div><b>SINCET Admin</b><small>Smart Attendance System</small></div></div>
+    <nav class="nav">
+      <div class="sec">Overview</div>
+      <a href="{{ url_for('admin_dashboard') }}" class="{{ 'on' if active=='dashboard' }}">📊 Dashboard</a>
+      <div class="sec">Accounts</div>
+      <a href="{{ url_for('admin_generate') }}" class="{{ 'on' if active=='generate' }}">⚡ Generate Accounts</a>
+      <a href="{{ url_for('admin_users') }}" class="{{ 'on' if active=='users' }}">👥 Manage Users</a>
+      <a href="{{ url_for('admin_history') }}" class="{{ 'on' if active=='history' }}">🕘 Generation History</a>
+      <div class="sec">Academics</div>
+      <a href="{{ url_for('admin_entity', ent='departments') }}" class="{{ 'on' if active=='departments' }}">🏛️ Departments</a>
+      <a href="{{ url_for('admin_entity', ent='sections') }}" class="{{ 'on' if active=='sections' }}">🧩 Sections</a>
+      <a href="{{ url_for('admin_entity', ent='subjects') }}" class="{{ 'on' if active=='subjects' }}">📚 Subjects</a>
+      <div class="sec">Records</div>
+      <a href="{{ url_for('admin_entity', ent='attendance') }}" class="{{ 'on' if active=='attendance' }}">🗓️ Attendance</a>
+      <a href="{{ url_for('admin_entity', ent='marks') }}" class="{{ 'on' if active=='marks' }}">📈 Performance</a>
+      <div class="sec">Account</div>
+      <a href="{{ password_url() }}">🔑 Change Password</a>
+      <a href="{{ logout_url() }}">🚪 Logout</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <header class="top">
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="btn ghost sm menu-btn" aria-label="Menu">☰</button>
+        <h2>{% block heading %}{% endblock %}</h2>
+      </div>
+      <div class="who"><div style="text-align:right"><b>{{ cur.name }}</b><br><small class="muted">{{ cur.username }} · Administrator</small></div>
+        <div class="avatar">{{ (cur.name or 'A')[0] }}</div></div>
+    </header>
+    <div class="page">{% block content %}{% endblock %}</div>
+  </main>
+</div>
+{% endblock %}

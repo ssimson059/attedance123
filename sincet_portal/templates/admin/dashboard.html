@@ -1,0 +1,54 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin Dashboard – SINCET{% endblock %}
+{% block heading %}Admin Dashboard{% endblock %}
+{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>{% endblock %}
+{% block content %}
+<div class="grid stats">
+  <div class="stat glass rise d1" style="--c:#3b82f6"><div class="ic">🎓</div><div class="num" data-k="students">0</div><div class="lbl">Total Students</div></div>
+  <div class="stat glass rise d1" style="--c:#a78bfa"><div class="ic">👨‍🏫</div><div class="num" data-k="faculty">0</div><div class="lbl">Total Faculty</div></div>
+  <div class="stat glass rise d2" style="--c:#22d3ee"><div class="ic">🏛️</div><div class="num" data-k="departments">0</div><div class="lbl">Total Departments</div></div>
+  <div class="stat glass rise d2" style="--c:#22c55e"><div class="ic">✅</div><div class="num" data-k="present">0</div><div class="lbl">Present Today</div></div>
+  <div class="stat glass rise d3" style="--c:#f43f5e"><div class="ic">❌</div><div class="num" data-k="absent">0</div><div class="lbl">Absent Today</div></div>
+  <div class="stat glass rise d3" style="--c:#f5b942"><div class="ic">📈</div><div class="num" data-k="average" data-dec="1" data-suf="%">0</div><div class="lbl">Average Attendance</div></div>
+  <div class="stat glass rise d4" style="--c:#fb923c"><div class="ic">⚠️</div><div class="num" data-k="at_risk">0</div><div class="lbl">At-Risk Students</div></div>
+</div>
+
+<div class="grid g2" style="margin-top:18px">
+  <div class="card glass rise d3"><h3>Attendance by Department (%)</h3><div class="chart-box"><canvas id="cDept"></canvas></div></div>
+  <div class="card glass rise d4"><h3>14-Day Attendance Trend (%)</h3><div class="chart-box"><canvas id="cTrend"></canvas></div></div>
+  <div class="card glass rise d4"><h3>Accounts per Department</h3><div class="chart-box"><canvas id="cAcc"></canvas></div></div>
+  <div class="card glass rise d5"><h3>At-Risk Students <small class="muted">(attendance &lt; 75% or marks &lt; 40%)</small></h3>
+    <div class="tw" style="max-height:270px"><table><thead><tr><th>Username</th><th>Name</th><th>Dept</th><th>Reason</th></tr></thead><tbody id="riskBody"></tbody></table></div></div>
+</div>
+
+<div class="card glass rise d5" style="margin-top:18px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+  <div><h3 style="margin:0">Quick actions</h3><span class="muted">Create accounts for faculty and students in seconds.</span></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="{{ url_for('admin_generate') }}">⚡ Generate Accounts</a>
+  <a class="btn ghost" href="{{ url_for('admin_users') }}">👥 Manage Users</a></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async () => {
+  let d;
+  try { d = await api('/admin/api/stats'); } catch (e) { toast(e.message, 'err'); return; }
+  $$('.num[data-k]').forEach(el => countUp(el, d.counters[el.dataset.k], +el.dataset.dec || 0, el.dataset.suf || ''));
+  $('#riskBody').innerHTML = d.at_risk.length ? d.at_risk.map(r =>
+    `<tr><td class="mono">${esc(r.username)}</td><td>${esc(r.name)}</td><td>${esc(r.dept)}</td><td><span class="pill danger">${esc(r.reasons)}</span></td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">No at-risk students 🎉</td></tr>';
+  if (!window.Chart) { toast('Charts could not load (check internet connection).', 'err'); return; }
+  Chart.defaults.color = '#c7d6f5'; Chart.defaults.font.family = 'Inter';
+  const grid = { color: 'rgba(255,255,255,.08)' };
+  const base = { responsive: true, maintainAspectRatio: false, animation: { duration: 1400, easing: 'easeOutQuart' }, plugins: { legend: { labels: { usePointStyle: true } } } };
+  new Chart($('#cDept'), { type: 'bar', data: { labels: d.dept_att.labels, datasets: [{ label: 'Attendance %', data: d.dept_att.values, borderRadius: 10, backgroundColor: '#f5b942' }] },
+    options: { ...base, scales: { y: { min: 0, max: 100, grid }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } } });
+  new Chart($('#cTrend'), { type: 'line', data: { labels: d.trend.labels, datasets: [{ label: 'Present %', data: d.trend.values, tension: .4, fill: true, spanGaps: true,
+      borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,.18)', pointRadius: 3 }] },
+    options: { ...base, scales: { y: { min: 0, max: 100, grid }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } } });
+  new Chart($('#cAcc'), { type: 'bar', data: { labels: d.accounts.labels, datasets: [
+      { label: 'Students', data: d.accounts.students, backgroundColor: '#3b82f6', borderRadius: 8 },
+      { label: 'Faculty', data: d.accounts.faculty, backgroundColor: '#e11d48', borderRadius: 8 }] },
+    options: { ...base, scales: { y: { beginAtZero: true, grid, ticks: { precision: 0 } }, x: { grid: { display: false } } } } });
+})();
+</script>
+{% endblock %}

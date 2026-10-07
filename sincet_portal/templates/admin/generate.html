@@ -1,0 +1,77 @@
+{% extends "admin/layout.html" %}
+{% block title %}Generate Accounts – SINCET{% endblock %}
+{% block heading %}User Account Generation{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <h3>⚡ Generate Accounts</h3>
+  <form id="genForm" novalidate>
+    <div class="grid g3">
+      <div class="field"><label>Account type</label>
+        <div class="seg"><input type="radio" name="role" id="rf" value="faculty" checked><label for="rf">👨‍🏫 Faculty</label>
+        <input type="radio" name="role" id="rs" value="student"><label for="rs">🎓 Student</label></div></div>
+      <div class="field"><label for="dept">Department</label>
+        <select class="inp" id="dept" required>
+          {% for d in depts %}<option value="{{ d.code }}">{{ d.name }} ({{ d.code }})</option>{% endfor %}
+        </select></div>
+      <div class="field"><label for="count">Number of accounts (1–{{ max_batch }})</label>
+        <input class="inp" id="count" type="number" min="1" max="{{ max_batch }}" value="5" required></div>
+    </div>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <button class="btn pulse" id="genBtn" type="submit">⚡ Generate Accounts</button>
+      <span class="muted" id="preview"></span>
+    </div>
+  </form>
+</div>
+
+<div class="card glass rise d2" id="result" style="margin-top:18px;display:none">
+  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <div><h3 style="margin:0">Generated accounts <small class="muted" id="batchTag"></small></h3>
+      <div class="flash error" style="margin:10px 0 0">🔒 Temporary passwords are shown <b>only now</b>. They are stored hashed and cannot be viewed again – export or copy them before leaving this page. Users must change them at first login.</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn ghost sm" id="copyAll">📋 Copy all</button>
+      <button class="btn ghost sm" data-exp="csv">⬇ CSV</button>
+      <button class="btn ghost sm" data-exp="pdf">⬇ PDF</button>
+    </div>
+  </div>
+  <div class="tw"><table><thead><tr><th>S.No</th><th>Name / ID</th><th>Role</th><th>Department</th><th>Username</th><th>Temporary Password</th><th>Account Status</th><th>Created Date</th></tr></thead>
+  <tbody id="body"></tbody></table></div>
+</div>
+
+<form id="expForm" method="post" target="_blank" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="rows" id="expRows">
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+let rows = [];
+const upd = () => {
+  const r = $('input[name=role]:checked').value, d = $('#dept').value, n = +$('#count').value || 0;
+  $('#preview').textContent = n > 0 ? `Will create ${n} account(s): ${r === 'faculty' ? 'FAC' : 'STU'}-${d}-xxx` : '';
+};
+['change', 'input'].forEach(ev => $('#genForm').addEventListener(ev, upd)); upd();
+
+$('#genForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const n = +$('#count').value;
+  if (!Number.isInteger(n) || n < 1 || n > {{ max_batch }}) { toast('Enter a number between 1 and {{ max_batch }}.', 'err'); return; }
+  const btn = $('#genBtn'); busy(btn, true);
+  try {
+    const d = await api('/admin/api/generate', 'POST', { role: $('input[name=role]:checked').value, department: $('#dept').value, count: n });
+    rows = d.accounts; $('#batchTag').textContent = '· Batch ' + d.batch_id;
+    $('#body').innerHTML = rows.map((r, i) => `<tr style="animation-delay:${Math.min(i, 30) * 30}ms">
+      <td>${r.sn}</td><td>${esc(r.name)}</td><td>${esc(r.role)}</td><td>${esc(r.department)}</td>
+      <td class="mono">${esc(r.username)}</td><td><span class="pass mono">${esc(r.password)}</span></td>
+      <td><span class="pill active">${esc(r.status)}</span></td><td>${esc(r.created)}</td></tr>`).join('');
+    $('#result').style.display = 'block'; $('#result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast(`${rows.length} account(s) created and saved to the database.`);
+  } catch (err) { toast(err.message, 'err'); }
+  finally { busy(btn, false); }
+});
+
+$('#copyAll').onclick = () => copyText(['Username\tTemporary Password', ...rows.map(r => `${r.username}\t${r.password}`)].join('\n'));
+$$('[data-exp]').forEach(b => b.onclick = () => {
+  if (!rows.length) return;
+  const f = $('#expForm'); f.action = '/admin/export/batch.' + b.dataset.exp; $('#expRows').value = JSON.stringify(rows); f.submit();
+});
+</script>
+{% endblock %}

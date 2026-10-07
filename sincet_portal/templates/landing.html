@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}SINCET Smart Attendance{% endblock %}
+{% block bgclass %}{% endblock %}
+{% block body %}
+<main class="auth">
+  <section class="auth-card glass rise center" style="max-width:560px">
+    <div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt="SINCET logo"></div>
+    <h1 style="margin-top:12px">Sir Issac College of Engineering and Technology</h1>
+    <p class="sub">Smart Attendance &amp; Student Performance Monitoring System</p>
+    <div class="grid g2" style="margin-top:22px">
+      <a class="btn pulse" style="padding:22px 10px;font-size:1.05rem" href="{{ url_for('student_login') }}">🎓 Student Login</a>
+      <a class="btn pulse" style="padding:22px 10px;font-size:1.05rem" href="{{ url_for('faculty_login') }}">👨‍🏫 Faculty Login</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

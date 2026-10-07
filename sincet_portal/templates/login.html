@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% set admin = portal == 'admin' %}
+{% block title %}{{ 'Admin Portal' if admin else 'Sign in' }} – SINCET{% endblock %}
+{% block bodyclass %}{{ 'admin' if admin else '' }}{% endblock %}
+{% block bgclass %}{% endblock %}
+{% block body %}
+<main class="auth">
+  <section class="auth-card glass rise">
+    <div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt="SINCET logo"></div>
+    <div class="center"><span class="badge">{{ 'Admin Portal' if admin else (portal|capitalize ~ ' Login') }}</span></div>
+    <h1 style="margin-top:12px">Sir Issac College of Engineering and Technology</h1>
+    <p class="sub">AI-Based Smart Attendance &amp; Student Performance Monitoring System</p>
+
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}
+    {% endwith %}
+
+    <form method="post" autocomplete="off" novalidate id="loginForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="u">Username</label>
+        <input class="inp" id="u" name="username" required maxlength="50" autofocus
+               placeholder="{{ 'Admin username' if admin else ('e.g. FAC-CSE-001' if portal == 'faculty' else 'e.g. STU-IT-004') }}"></div>
+      <div class="field"><label for="p">Password</label>
+        <div class="pw"><input class="inp" id="p" name="password" type="password" required maxlength="100" placeholder="Enter your password">
+        <button type="button" data-togglepw aria-label="Show password">👁</button></div></div>
+      <button class="btn pulse" style="width:100%" type="submit">{{ 'Sign in to Admin Portal' if admin else ('Sign in as ' ~ portal|capitalize) }} →</button>
+    </form>
+
+    {% if not admin %}<p class="alt">{% if portal == 'student' %}Faculty? <a href="{{ url_for('faculty_login') }}">Faculty login</a>{% else %}Student? <a href="{{ url_for('student_login') }}">Student login</a>{% endif %}</p>{% endif %}
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+$('#loginForm').addEventListener('submit', e => {
+  if (!$('#u').value.trim() || !$('#p').value) { e.preventDefault(); toast('Enter both username and password.', 'err'); return; }
+  const b = e.target.querySelector('button[type=submit]'); setTimeout(() => busy(b, true), 0);
+});
+</script>
+{% endblock %}

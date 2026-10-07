@@ -1,0 +1,122 @@
+{% extends "admin/layout.html" %}
+{% block title %}Manage Users – SINCET{% endblock %}
+{% block heading %}Manage Users{% endblock %}
+{% block content %}
+<div class="card glass rise d1">
+  <div class="bar">
+    <input class="inp" id="q" placeholder="🔍 Search username or name" style="flex:2">
+    <select class="inp" id="fRole"><option value="">All roles</option><option value="faculty">Faculty</option><option value="student">Student</option></select>
+    <select class="inp" id="fDept"><option value="">All departments</option>{% for d in depts %}<option value="{{ d.code }}">{{ d.name }}</option>{% endfor %}</select>
+    <select class="inp" id="fStatus"><option value="">Any status</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+    <a class="btn ghost sm" id="expCsv">⬇ CSV</a><a class="btn ghost sm" id="expPdf">⬇ PDF</a>
+    <a class="btn sm" href="{{ url_for('admin_generate') }}">＋ Generate</a>
+  </div>
+  <div class="tw"><table><thead><tr><th>#</th><th>Name</th><th>Role</th><th>Dept</th><th>Yr/Sec</th><th>Username</th><th>Status</th><th>Device</th><th>Created</th><th>Actions</th></tr></thead>
+  <tbody id="body"></tbody></table></div>
+  <p class="muted" id="count" style="margin:10px 2px 0"></p>
+</div>
+
+<div class="modal" id="editM"><div class="box glass">
+  <h3>Edit user <span class="mono muted" id="eUser"></span></h3>
+  <input type="hidden" id="eId">
+  <div class="field"><label>Full name</label><input class="inp" id="eName" maxlength="100"></div>
+  <div class="grid g2">
+    <div class="field"><label>Department</label><select class="inp" id="eDept">{% for d in depts %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label>Status</label><select class="inp" id="eStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+  </div>
+  <div class="grid g2" id="stuOnly">
+    <div class="field"><label>Year</label><select class="inp" id="eYear"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+    <div class="field"><label>Section</label><select class="inp" id="eSec"></select></div>
+  </div>
+  <p class="muted" style="font-size:.8rem">The username stays the same even if the department is changed.</p>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn" id="eSave">Save changes</button></div>
+</div></div>
+
+<div class="modal" id="pwM"><div class="box glass">
+  <h3>🔑 New temporary password</h3>
+  <p class="muted">Shown only once. The user must change it at next login.</p>
+  <div class="field"><label>Username</label><div class="mono" id="pwUser" style="font-size:1.1rem"></div></div>
+  <div class="field"><label>Temporary password</label><span class="pass mono" id="pwVal" style="font-size:1.15rem"></span></div>
+  <div class="row-end"><button class="btn ghost" id="pwCopy">📋 Copy</button><button class="btn" data-close>Done</button></div>
+</div></div>
+
+<div class="modal" id="delM"><div class="box glass">
+  <h3>Delete account?</h3>
+  <p>Permanently delete <b class="mono" id="delName"></b> together with their attendance and marks. This cannot be undone.</p>
+  <div class="row-end"><button class="btn ghost" data-close>Cancel</button><button class="btn danger" id="delOk">Delete</button></div>
+</div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const SECTIONS = {{ sections|tojson }};
+const DEPTS = {{ depts|tojson }};
+let list = [];
+
+function params() { return new URLSearchParams({ q: $('#q').value.trim(), role: $('#fRole').value, dept: $('#fDept').value, status: $('#fStatus').value }); }
+async function load() {
+  try { const d = await api('/admin/api/users?' + params()); list = d.rows; render(); }
+  catch (e) { toast(e.message, 'err'); }
+  $('#expCsv').href = '/admin/export/users.csv?' + params(); $('#expPdf').href = '/admin/export/users.pdf?' + params();
+}
+function render() {
+  $('#body').innerHTML = list.length ? list.map((u, i) => `<tr style="animation-delay:${Math.min(i, 20) * 25}ms">
+    <td>${i + 1}</td><td>${esc(u.name)}</td><td>${u.role === 'faculty' ? '👨‍🏫 Faculty' : '🎓 Student'}</td><td>${esc(u.dept)}</td>
+    <td>${u.role === 'student' ? esc((u.year_no || '–') + ' / ' + (u.section || '–')) : '–'}</td>
+    <td class="mono">${esc(u.username)}</td><td><span class="pill ${u.status}">${u.status}</span></td>
+    <td>${u.role === 'student' ? `<button class="btn ghost sm" data-a="device" data-i="${i}" title="Reset registered phone">📱</button>` : ''}</td><td>${esc((u.created_at || '').slice(0, 10))}</td>
+    <td><div class="acts">
+      <button class="btn ghost sm" data-a="edit" data-i="${i}" title="Edit">✏️</button>
+      <button class="btn ghost sm" data-a="toggle" data-i="${i}" title="${u.status === 'active' ? 'Deactivate' : 'Activate'}">${u.status === 'active' ? '⏸' : '▶'}</button>
+      <button class="btn ghost sm" data-a="reset" data-i="${i}" title="Reset password">🔑</button>
+      <button class="btn danger sm" data-a="del" data-i="${i}" title="Delete">🗑</button></div></td></tr>`).join('')
+    : '<tr><td colspan="10" class="empty">No users match. Use “Generate” to create accounts.</td></tr>';
+  $('#count').textContent = list.length + ' user(s)' + (list.length >= 500 ? ' (showing first 500)' : '');
+}
+['input'].forEach(ev => $('#q').addEventListener(ev, debounce(load)));
+['fRole', 'fDept', 'fStatus'].forEach(id => $('#' + id).addEventListener('change', load));
+
+function fillSections() {
+  const dept = DEPTS.find(d => d.id == $('#eDept').value);
+  const y = $('#eYear').value;
+  $('#eSec').innerHTML = '<option value="">—</option>' + SECTIONS.filter(s => dept && s.dept === dept.code && (!y || s.year_no == y))
+    .map(s => `<option value="${s.id}">Y${s.year_no} – ${esc(s.name)}</option>`).join('');
+}
+$('#eDept').onchange = $('#eYear').onchange = fillSections;
+
+let cur = null;
+$('#body').addEventListener('click', async e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const u = list[+b.dataset.i]; cur = u;
+  if (b.dataset.a === 'edit') {
+    $('#eId').value = u.id; $('#eUser').textContent = u.username; $('#eName').value = u.name;
+    $('#eDept').value = u.department_id; $('#eStatus').value = u.status;
+    $('#stuOnly').style.display = u.role === 'student' ? 'grid' : 'none';
+    $('#eYear').value = u.year_no || ''; fillSections(); $('#eSec').value = u.section_id || '';
+    openModal('editM');
+  } else if (b.dataset.a === 'toggle') {
+    try { await api(`/admin/api/users/${u.id}/status`, 'POST', { status: u.status === 'active' ? 'inactive' : 'active' });
+      toast(`${u.username} ${u.status === 'active' ? 'deactivated' : 'activated'}`); load(); } catch (er) { toast(er.message, 'err'); }
+  } else if (b.dataset.a === 'reset') {
+    if (!confirm(`Reset password for ${u.username}?`)) return;
+    try { const d = await api(`/admin/api/users/${u.id}/reset-password`, 'POST', {});
+      $('#pwUser').textContent = d.username; $('#pwVal').textContent = d.password; openModal('pwM'); } catch (er) { toast(er.message, 'err'); }
+  } else if (b.dataset.a === 'device') {
+    if (!confirm(`Reset the registered phone for ${u.username}? They can register a new one on their next check-in.`)) return;
+    try { await api(`/admin/api/users/${u.id}/reset-device`, 'POST'); toast('Registered device cleared.'); } catch (er) { toast(er.message, 'err'); }
+  } else if (b.dataset.a === 'del') { $('#delName').textContent = u.username; openModal('delM'); }
+});
+$('#eSave').onclick = async () => {
+  const b = $('#eSave'); busy(b, true);
+  try {
+    await api('/admin/api/users/' + $('#eId').value, 'PUT', { name: $('#eName').value, department_id: $('#eDept').value, status: $('#eStatus').value,
+      year_no: $('#eYear').value, section_id: $('#eSec').value });
+    closeModal('editM'); toast('User updated'); load();
+  } catch (e) { toast(e.message, 'err'); } finally { busy(b, false); }
+};
+$('#pwCopy').onclick = () => copyText($('#pwVal').textContent);
+$('#delOk').onclick = async () => {
+  try { await api('/admin/api/users/' + cur.id, 'DELETE'); closeModal('delM'); toast('Account deleted'); load(); } catch (e) { toast(e.message, 'err'); }
+};
+load();
+</script>
+{% endblock %}

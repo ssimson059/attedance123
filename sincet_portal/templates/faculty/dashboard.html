@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Faculty Dashboard – SINCET{% endblock %}
+{% block body %}
+<main class="main" style="max-width:1280px;margin:auto">
+  <header class="top">
+    <div class="brand"><div class="logo"><img src="{{ url_for('static', filename='img/logo.png') }}" alt=""></div>
+      <div><b>Faculty Dashboard</b><small>{{ me.dept_name }} · SINCET</small></div></div>
+    <div class="who"><div style="text-align:right"><b>{{ me.name }}</b><br><small class="muted">{{ me.username }}</small></div>
+      <a class="btn ghost sm" href="{{ password_url() }}" title="Change password">🔑</a><a class="btn ghost sm" href="{{ logout_url() }}">Logout</a></div>
+  </header>
+
+  <div class="grid g4">
+    <div class="card glass rise d1"><small class="muted">Faculty ID</small><h3 class="mono" style="margin:6px 0 0">{{ me.username }}</h3></div>
+    <div class="card glass rise d1"><small class="muted">Department</small><h3 style="margin:6px 0 0">{{ me.dept_name }}</h3></div>
+    <div class="card glass rise d2"><small class="muted">Sessions today</small><h3 style="margin:6px 0 0">{{ today_sessions }}</h3></div>
+    <div class="card glass rise d2"><small class="muted">Total sessions taken</small><h3 style="margin:6px 0 0">{{ total_sessions }}</h3></div>
+  </div>
+
+  <div class="card glass rise d2" style="margin-top:18px">
+    <h3>1 · Select class</h3>
+    <div class="grid g4">
+      <div class="field"><label>Department</label><select class="inp" id="dept">{% for d in depts %}<option value="{{ d.id }}" {{ 'selected' if d.id == me.department_id }}>{{ d.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Year</label><select class="inp" id="year"><option value="">Select</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      <div class="field"><label>Section</label><select class="inp" id="section"><option value="">Select year first</option></select></div>
+      <div class="field"><label>Subject</label><select class="inp" id="subject"><option value="">Select year first</option></select></div>
+    </div>
+    <button class="btn ghost" id="load">📋 Load roster &amp; report</button>
+    <span class="muted" style="margin-left:10px">Date: {{ today }}</span>
+  </div>
+
+  <div class="two" style="margin-top:18px">
+    <div class="card glass rise d3">
+      <h3>2 · AI attendance session <span class="pill info" id="state">Not started</span></h3>
+      <div id="setup">
+        <div class="grid g2">
+          <div class="field"><label>Open for</label><select class="inp" id="minutes"><option value="5">5 minutes</option><option value="10" selected>10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option></select></div>
+          <div class="field"><label>Classroom radius (m)</label><input class="inp" id="radius" type="number" min="20" max="1000" value="100"></div>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;margin:4px 0 14px"><input type="checkbox" id="geo" checked> Lock to this classroom (students must be physically inside)</label>
+        <button class="btn good" id="start" disabled>▶ Start AI attendance</button>
+        <p class="muted" style="font-size:.82rem">Students just sign in on their own phone and keep the page open. The AI engine checks registered phone, classroom location, campus network and steady presence, then marks Present by itself. You only review the doubtful cases. No camera or extra hardware.</p>
+      </div>
+      <div id="live" style="display:none">
+        <div class="grid g3" style="margin-bottom:12px">
+          <div class="tip good" style="margin:0"><small class="muted">AI auto-marked</small><br><b id="kAuto" style="font-size:1.4rem">0</b></div>
+          <div class="tip warn" style="margin:0"><small class="muted">Needs your review</small><br><b id="kRev" style="font-size:1.4rem">0</b></div>
+          <div class="tip info" style="margin:0"><small class="muted">Still verifying</small><br><b id="kWait" style="font-size:1.4rem">0</b></div>
+        </div>
+        <p class="muted" style="font-size:.82rem;margin:0 0 6px">Backup code for a student whose GPS fails (optional):</p>
+        <div class="codebox"><div class="code" id="code" style="font-size:2rem">------</div>
+          <div class="bar"><i id="codeBar"></i></div>
+          <small class="muted">New code in <b id="codeTtl">30</b>s · session closes in <b id="endsIn">--:--</b></small></div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn ghost" id="extend">+5 min</button>
+          <button class="btn danger" id="close">■ End &amp; mark the rest absent</button>
+        </div>
+        <p class="muted" id="geoNote" style="font-size:.82rem;margin-bottom:0"></p>
+      </div>
+    </div>
+    <div class="card glass rise d3">
+      <h3>Live roster <span class="pill info" id="sum">0 / 0 present</span></h3>
+      <div class="tw" style="max-height:430px"><table><thead><tr><th>Student</th><th>Status</th><th>AI</th><th>Manual</th></tr></thead><tbody id="body"><tr><td colspan="4" class="empty">Choose a class and load the roster.</td></tr></tbody></table></div>
+    </div>
+  </div>
+
+  <div class="card glass rise d3" style="margin-top:18px">
+    <h3>3 · Review queue <span class="pill warn" id="qn">0</span> <small class="muted">only doubtful or suspicious cases appear here</small></h3>
+    <div class="tw" style="max-height:340px"><table><thead><tr><th>Student</th><th>AI confidence</th><th>Why</th><th>Decision</th></tr></thead><tbody id="queue"><tr><td colspan="4" class="empty">Nothing to review.</td></tr></tbody></table></div>
+  </div>
+
+  <div class="two" style="margin-top:18px">
+    <div class="card glass rise d4"><h3>My recent sessions</h3>
+      <div class="tw" style="max-height:300px"><table><thead><tr><th>Date</th><th>Class</th><th>Subject</th><th>P</th><th>A</th><th></th></tr></thead><tbody id="hist"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody></table></div></div>
+    <div class="card glass rise d4"><h3>Class attendance report <small class="muted">(selected subject)</small></h3>
+      <div class="tw" style="max-height:300px"><table><thead><tr><th>Student</th><th>Present</th><th>%</th></tr></thead><tbody id="rep"><tr><td colspan="3" class="empty">Load a class to see the report.</td></tr></tbody></table></div></div>
+  </div>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+let roster = [], sid = null, reviewSid = null, poll = null, tick = null, snap = null;
+const sel = id => $('#' + id);
+const ctx = () => ({ dept: sel('dept').value, year: sel('year').value, section: sel('section').value, subject: sel('subject').value });
+const mmss = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+async function loadOptions(pre) {
+  const y = sel('year').value, d = sel('dept').value; if (!y) return;
+  try {
+    const o = await api(`/faculty/api/options?dept=${d}&year=${y}`);
+    sel('section').innerHTML = o.sections.length ? '<option value="">Select</option>' + o.sections.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('') : '<option value="">No sections</option>';
+    sel('subject').innerHTML = o.subjects.length ? '<option value="">Select</option>' + o.subjects.map(s => `<option value="${s.id}">${esc(s.code)} – ${esc(s.name)}</option>`).join('') : '<option value="">No subjects</option>';
+    if (pre) { sel('section').value = pre.section; sel('subject').value = pre.subject; }
+  } catch (e) { toast(e.message, 'err'); }
+}
+sel('year').onchange = sel('dept').onchange = () => loadOptions();
+
+function renderRoster() {
+  sel('body').innerHTML = roster.length ? roster.map((s, i) => `<tr><td><b>${esc(s.name)}</b><br><small class="mono muted">${esc(s.username)}</small></td>
+    <td>${s.status ? `<span class="pill ${s.status}">${s.status}</span> <small class="muted">${esc(s.method || '')} ${esc(s.at || '')}</small>` : '<span class="muted">—</span>'}</td>
+    <td>${s.score === null || s.score === undefined ? '<span class="muted">—</span>' : `<span class="pill ${s.score >= 90 ? 'good' : s.score >= 60 ? 'warn' : 'info'}">${s.score}%</span>`}</td>
+    <td><div class="acts"><button class="btn good sm" data-m="${i}" data-s="Present">P</button><button class="btn danger sm" data-m="${i}" data-s="Absent">A</button></div></td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">No active students in this class.</td></tr>';
+  sel('sum').textContent = `${roster.filter(s => s.status === 'Present').length} / ${roster.length} present`;
+}
+function renderQueue(q) {
+  sel('qn').textContent = q.length;
+  sel('queue').innerHTML = q.length ? q.map(x => `<tr><td><b>${esc(x.name)}</b><br><small class="mono muted">${esc(x.username)}</small></td>
+    <td>${x.score === null ? '<span class="pill danger">flagged</span>' : `<span class="pill ${x.decision === 'blocked' ? 'danger' : 'warn'}">${x.score}%</span>`}</td>
+    <td style="font-size:.82rem">${esc(x.reasons || '')}${(x.flags || []).map(f => `<br><span class="pill danger">${esc(f.kind)}</span> <small>${esc(f.detail || '')}</small>`).join('')}</td>
+    <td><div class="acts"><button class="btn good sm" data-rv="${x.id}" data-a="approve">Approve</button><button class="btn danger sm" data-rv="${x.id}" data-a="reject">Reject</button></div></td></tr>`).join('')
+    : '<tr><td colspan="4" class="empty">Nothing to review.</td></tr>';
+}
+sel('queue').addEventListener('click', async e => {
+  const b = e.target.closest('[data-rv]'); const id = sid || reviewSid; if (!b || !id) return;
+  try { await api(`/faculty/api/session/${id}/review`, 'POST', { student_id: +b.dataset.rv, action: b.dataset.a }); toast(b.dataset.a === 'approve' ? 'Marked present.' : 'Marked absent.');
+    if (sid) refresh(); else { const v = await api(`/faculty/api/session/${id}/live`); roster = v.students; renderRoster(); renderQueue(v.queue || []); loadReport(); } } catch (er) { toast(er.message, 'err'); }
+});
+async function loadReport() {
+  const c = ctx(); if (!c.section || !c.subject) return;
+  try {
+    const r = await api('/faculty/api/report?' + new URLSearchParams(c));
+    sel('rep').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td><b>${esc(x.name)}</b><br><small class="mono muted">${esc(x.username)}</small></td><td>${x.p} / ${x.t}</td>
+      <td>${x.pct === null ? '—' : `<span class="pill ${x.pct >= r.threshold ? 'good' : 'danger'}">${x.pct}%</span>`}</td></tr>`).join('') : '<tr><td colspan="3" class="empty">No students.</td></tr>';
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function loadRoster() {
+  const c = ctx();
+  if (!c.year || !c.section || !c.subject) { toast('Select department, year, section and subject.', 'err'); return; }
+  try {
+    roster = (await api('/faculty/api/roster?' + new URLSearchParams(c))).students;
+    renderRoster(); sel('start').disabled = !roster.length; loadReport();
+    if (!roster.length) toast('No active students found for this class.', 'err');
+  } catch (e) { toast(e.message, 'err'); }
+}
+sel('load').onclick = loadRoster;
+
+sel('body').addEventListener('click', async e => {
+  const b = e.target.closest('[data-m]'); if (!b) return;
+  const s = roster[+b.dataset.m];
+  try { await api('/faculty/api/mark', 'POST', { student_id: s.id, subject_id: +sel('subject').value, status: b.dataset.s });
+    s.status = b.dataset.s; s.method = 'manual'; renderRoster(); loadReport(); } catch (er) { toast(er.message, 'err'); }
+});
+
+/* ---- session ---- */
+function getPos() {
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej(new Error('Location is not available in this browser.'));
+    navigator.geolocation.getCurrentPosition(p => res(p.coords), er => rej(new Error('Location permission denied or unavailable.')), { enableHighAccuracy: true, timeout: 15000 });
+  });
+}
+sel('start').onclick = async () => {
+  const b = sel('start'); busy(b, true);
+  try {
+    const body = { ...ctx(), minutes: +sel('minutes').value };
+    if (sel('geo').checked) {
+      try { const c = await getPos(); body.lat = c.latitude; body.lon = c.longitude; body.radius = +sel('radius').value; }
+      catch (er) { if (!confirm(er.message + '\n\nStart WITHOUT the classroom location lock?')) { return; } }
+    }
+    const r = await api('/faculty/api/session/start', 'POST', body);
+    attach(r.id);
+  } catch (e) { toast(e.message, 'err'); } finally { busy(b, false); }
+};
+function attach(id) {
+  sid = reviewSid = id; sel('setup').style.display = 'none'; sel('live').style.display = '';
+  clearInterval(poll); clearInterval(tick); refresh(); poll = setInterval(refresh, 2500);
+  tick = setInterval(() => { if (!snap) return; snap.code_ttl = Math.max(0, snap.code_ttl - 1); snap.ends_in = Math.max(0, snap.ends_in - 1); paint(); }, 1000);
+}
+function detach() { clearInterval(poll); clearInterval(tick); sid = snap = null; sel('setup').style.display = ''; sel('live').style.display = 'none'; sel('state').textContent = 'Not started'; sel('state').className = 'pill info'; }
+function paint() {
+  if (!snap || snap.status !== 'open') return;
+  sel('code').textContent = snap.code.slice(0, 3) + ' ' + snap.code.slice(3);
+  sel('codeTtl').textContent = snap.code_ttl; sel('endsIn').textContent = mmss(snap.ends_in);
+  sel('codeBar').style.width = (100 * snap.code_ttl / 30) + '%';
+}
+async function refresh() {
+  if (!sid) return;
+  try {
+    snap = await api(`/faculty/api/session/${sid}/live`);
+    roster = snap.students; renderRoster(); renderQueue(snap.queue || []);
+    sel('kAuto').textContent = snap.ai_auto; sel('kRev').textContent = (snap.queue || []).length; sel('kWait').textContent = snap.students.filter(x => !x.status).length;
+    if (snap.status !== 'open') { toast('Session closed.'); detach(); loadHistory(); loadReport(); return; }
+    sel('state').textContent = 'Open'; sel('state').className = 'pill good';
+    sel('geoNote').textContent = snap.geofence ? `📍 Location lock ON – students must be within ${snap.radius} m of this classroom.` : '📍 Location lock is off for this session.';
+    paint();
+  } catch (e) { toast(e.message, 'err'); }
+}
+sel('extend').onclick = async () => { try { await api(`/faculty/api/session/${sid}/extend`, 'POST'); refresh(); toast('Extended by 5 minutes.'); } catch (e) { toast(e.message, 'err'); } };
+sel('close').onclick = async () => {
+  if (!confirm('End the session? Everyone who has not checked in will be marked Absent.')) return;
+  try { const r = await api(`/faculty/api/session/${sid}/close`, 'POST'); toast(`Session closed – ${r.absent_marked} student(s) marked absent.`); await refresh(); } catch (e) { toast(e.message, 'err'); }
+};
+
+async function loadHistory() {
+  try {
+    const r = await api('/faculty/api/sessions');
+    sel('hist').innerHTML = r.rows.length ? r.rows.map(x => `<tr><td>${esc(x.att_date)}</td><td>${esc(x.dept)} Y${x.year_no}-${esc(x.section)}</td><td>${esc(x.subject)}</td><td>${x.present}</td><td>${x.absent}</td>
+      <td><span class="pill ${x.status === 'open' ? 'good' : 'info'}">${x.status}</span></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No sessions yet.</td></tr>';
+  } catch (e) { /* non-critical */ }
+}
+(async () => {
+  loadHistory();
+  try {
+    const r = (await api('/faculty/api/session/open')).session;   // resume a running session after refresh
+    if (r) { sel('dept').value = r.dept; sel('year').value = r.year; await loadOptions(r); await loadRoster(); attach(r.id); }
+  } catch (e) { /* ignore */ }
+})();
+</script>
+{% endblock %}
